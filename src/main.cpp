@@ -8,31 +8,45 @@
 #include <iostream>
 #include <vector>
 #include <sstream>
+#include <memory>
 
 using namespace std;
 
 struct Link;
 struct Node;
 
-vector<Node> nodes;
-vector<Link> globalLinks;
+typedef shared_ptr<Link> LinkSP;
+typedef shared_ptr<Node> NodeSP;
+
+vector<NodeSP> nodes;
+vector<LinkSP> globalLinks;
 
 struct Link
 {
 public:
-	Node *theNodes[2];
+	NodeSP theNodes[2];
 	bool active;
-	Link(Node &first, Node &second)
+	Link(NodeSP first, NodeSP second)
 	{
 		this->active = true;
-		theNodes[0] = &first;
-		theNodes[1] = &second;
+		theNodes[0] = first;
+		theNodes[1] = second;
 	}
-	Link(const Link &other)
+
+	Link(Link *other)
 	{
-		this->active = other.active;
-		this->theNodes[0] = other.theNodes[0];
-		this->theNodes[1] = other.theNodes[1];
+		this->active = other->active;
+		this->theNodes[0] = other->theNodes[0];
+		this->theNodes[1] = other->theNodes[1];
+	}
+
+	NodeSP getOtherNode(NodeSP origNode)
+	{
+		if (origNode == theNodes[0])
+			return theNodes[1];
+		if (origNode == theNodes[1])
+			return theNodes[0];
+		return NULL;
 	}
 };
 
@@ -40,7 +54,7 @@ struct Node
 {
 	int id;
 	bool active;
-	vector<Link> links;
+	vector<LinkSP> links;
 	Node(int);
 	~Node();
 	int activeLinks();
@@ -61,10 +75,10 @@ int Node :: activeLinks()
 {
 	int linkCount = 0;
 	vector<int> myint;
-	for (vector::iterator<Link> currLink = links.begin();
+	for (vector<LinkSP>::iterator currLink = links.begin();
 			currLink != links.end(); currLink++)
 	{
-		if(currLink->active)
+		if((*currLink)->active)
 		{
 			linkCount++;
 		}
@@ -74,19 +88,27 @@ int Node :: activeLinks()
 
 int main()
 {
+	stringstream ss;
+	string firstLine;
+	getline(cin, firstLine);
+	ss << firstLine;
 	int numGraphs;
-	cin >> numGraphs;
+	ss >> numGraphs;
+	ss.str("");
+	ss.clear();
 	for (int graphNum = 0; graphNum < numGraphs; graphNum++)
 	{
 		// Read the next 2 lines in.
 		string numStuffLine;
 		getline(cin, numStuffLine);
-		stringstream ss;
 		ss << numStuffLine;
 		int numNodes, numLinks;
-		ss >> numNodes >> numLinks;
+		cout << ss.str();
+		ss >> numNodes;
+		ss >> numLinks;
 
-		ss.flush();
+		ss.str("");
+		ss.clear();
 		string linkLine;
 		getline(cin, linkLine);
 
@@ -101,7 +123,7 @@ int main()
 		}
 		for (int nodeNum = 0; nodeNum < numNodes; nodeNum++)
 		{
-			nodes.push_back(Node(nodeNum));
+			nodes.push_back(NodeSP(new Node(nodeNum)));
 		}
 		// Now make the links, and hook them up toegether.
 		ss << linkLine;
@@ -109,22 +131,35 @@ int main()
 		{
 			int firstNum, secondNum;
 			ss >> firstNum >> secondNum;
-			Node &first = nodes[firstNum];
-			Node &second = nodes[secondNum];
-			globalLinks.push_back(Link(first, second));
-			Link ourLink = globalLinks.back();
-			first.links.push_back(ourLink);
-			second.links.push_back(ourLink);
+			NodeSP first = nodes[firstNum];
+			NodeSP second = nodes[secondNum];
+			LinkSP ourLink(new Link(first, second));
+			globalLinks.push_back(ourLink);
+			first->links.push_back(ourLink);
+			second->links.push_back(ourLink);
 		}
 
 		for (int nodeNum = 0; nodeNum < numNodes; nodeNum++)
 		{
-			Node *nodePtr;
-			nodePtr = &nodes[nodeNum];
-			while (nodePtr->links.size() <= 1)
+			NodeSP nodePtr = nodes[nodeNum];
+			if (!nodePtr->active)
+			{
+				continue;
+			}
+			while (nodePtr && nodePtr->activeLinks() <= 1)
 			{
 				nodePtr->active = false;
-				nodePtr = nodePtr->links[0];
+				Node *nextPtr = NULL;
+				for (unsigned i = 0; i < nodePtr->links.size(); i++)
+				{
+					if (nodePtr->links[i]->active)
+					{
+						nodePtr->links[i]->active = false;
+						nextPtr = nodePtr->links[i]->getOtherNode(nodePtr);
+						break;
+					}
+				}
+				nodePtr = nextPtr;
 			}
 		}
 	}
